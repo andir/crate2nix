@@ -506,12 +506,12 @@ rec {
             name = "libc";
             packageId = "libc 0.2.66 (registry+https://github.com/rust-lang/crates.io-index)";
             usesDefaultFeatures = false;
-            target = features: target."unix";
+            target = {target, features}: target."unix";
           }
           {
             name = "wasi";
             packageId = "wasi 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)";
-            target = features: (target."os" == "wasi");
+            target = {target, features}: (target."os" == "wasi");
           }
         ];
         features = {
@@ -702,7 +702,7 @@ rec {
           {
             name = "winapi-util";
             packageId = "winapi-util 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)";
-            target = features: target."windows";
+            target = {target, features}: target."windows";
           }
         ];
         features = {
@@ -1070,13 +1070,13 @@ rec {
             name = "libc";
             packageId = "libc 0.2.66 (registry+https://github.com/rust-lang/crates.io-index)";
             usesDefaultFeatures = false;
-            target = features: target."unix";
+            target = {target, features}: target."unix";
           }
           {
             name = "rand_chacha";
             packageId = "rand_chacha 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)";
             usesDefaultFeatures = false;
-            target = features: (!(target."os" == "emscripten"));
+            target = {target, features}: (!(target."os" == "emscripten"));
           }
           {
             name = "rand_core";
@@ -1085,7 +1085,7 @@ rec {
           {
             name = "rand_hc";
             packageId = "rand_hc 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)";
-            target = features: (target."os" == "emscripten");
+            target = {target, features}: (target."os" == "emscripten");
           }
         ];
         features = {
@@ -1273,7 +1273,7 @@ rec {
           {
             name = "winapi-util";
             packageId = "winapi-util 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)";
-            target = features: target."windows";
+            target = {target, features}: target."windows";
           }
         ];
         features = {
@@ -1525,12 +1525,12 @@ rec {
           {
             name = "redox_syscall";
             packageId = "redox_syscall 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)";
-            target = features: (target."os" == "redox");
+            target = {target, features}: (target."os" == "redox");
           }
           {
             name = "winapi";
             packageId = "winapi 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)";
-            target = features: target."windows";
+            target = {target, features}: target."windows";
             features = [ "std" "minwinbase" "minwindef" "ntdef" "profileapi" "sysinfoapi" "timezoneapi" ];
           }
         ];
@@ -1703,13 +1703,13 @@ rec {
           {
             name = "winapi";
             packageId = "winapi 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)";
-            target = features: target."windows";
+            target = {target, features}: target."windows";
             features = [ "std" "winnt" ];
           }
           {
             name = "winapi-util";
             packageId = "winapi-util 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)";
-            target = features: target."windows";
+            target = {target, features}: target."windows";
           }
         ];
         features = {
@@ -1743,12 +1743,12 @@ rec {
           {
             name = "winapi-i686-pc-windows-gnu";
             packageId = "winapi-i686-pc-windows-gnu 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)";
-            target = features: (stdenv.hostPlatform.config == "i686-pc-windows-gnu");
+            target = {target, features}: (stdenv.hostPlatform.config == "i686-pc-windows-gnu");
           }
           {
             name = "winapi-x86_64-pc-windows-gnu";
             packageId = "winapi-x86_64-pc-windows-gnu 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)";
-            target = features: (stdenv.hostPlatform.config == "x86_64-pc-windows-gnu");
+            target = {target, features}: (stdenv.hostPlatform.config == "x86_64-pc-windows-gnu");
           }
         ];
         features = {
@@ -1781,7 +1781,7 @@ rec {
           {
             name = "winapi";
             packageId = "winapi 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)";
-            target = features: target."windows";
+            target = {target, features}: target."windows";
             features = [ "std" "consoleapi" "errhandlingapi" "fileapi" "minwindef" "processenv" "winbase" "wincon" "winerror" "winnt" ];
           }
         ];
@@ -1829,11 +1829,10 @@ rec {
 
   # Target (platform) data for conditional dependencies.
   # This corresponds roughly to what buildRustCrate is setting.
-  target = {
+  defaultTarget = {
       unix = true;
       windows = false;
       fuchsia = true;
-      # We don't support tests yet, so this is true for now.
       test = false;
 
       # This doesn't appear to be officially documented anywhere yet.
@@ -1892,65 +1891,88 @@ rec {
     );
 
   /* A restricted overridable version of  buildRustCrateWithFeaturesImpl. */
-  buildRustCrateWithFeatures = {
-        packageId, 
-        features ? rootFeatures,
-        crateOverrides ? defaultCrateOverrides, 
-        buildRustCrateFunc ? buildRustCrate
-      }:
+  buildRustCrateWithFeatures =
+    { packageId
+    , features ? rootFeatures
+    , crateOverrides ? defaultCrateOverrides
+    , buildRustCrateFunc ? buildRustCrate
+    , doTest ? false,
+    }:
     lib.makeOverridable
-      ({features, crateOverrides}: 
+      ({features, crateOverrides, doTest}:
         let builtRustCrates = builtRustCratesWithFeatures {
-          inherit packageId features crateOverrides  buildRustCrateFunc;
+          inherit packageId features crateOverrides buildRustCrateFunc doTest;
         };
         in builtRustCrates.${packageId})
-      { inherit features crateOverrides; };
+      { inherit features crateOverrides doTest; };
 
   /* Returns a buildRustCrate derivation for the given packageId and features. */
-  builtRustCratesWithFeatures = { 
-        crateConfigs? crates, 
-        packageId,
-        features,
-        crateOverrides, 
-        buildRustCrateFunc
-      } @ args:
+  builtRustCratesWithFeatures =
+    { packageId
+    , features
+    , crateConfigs ? crates
+    , crateOverrides
+    , buildRustCrateFunc
+    , doTest
+    , target ? defaultTarget
+    } @ args:
     assert (builtins.isAttrs crateConfigs);
     assert (builtins.isString packageId);
     assert (builtins.isList features);
+    assert (builtins.isAttrs target);
 
-    let mergedFeatures = mergePackageFeatures args;
+    let mergedFeatures = mergePackageFeatures ( args // { inherit target; });
+        mergedTestFeatures = mergePackageFeatures ( args // { target = target // { test = true; }; });
+
+        buildByPackageId = packageId: buildByPackageIdImpl packageId false;
+        buildTestByPackageId = packageId: buildByPackageIdImpl packageId true;
+
         # Memoize built packages so that reappearing packages are only built once.
         builtByPackageId =
           lib.mapAttrs (packageId: value: buildByPackageId packageId) crateConfigs;
-        buildByPackageId = packageId:
-          let features = mergedFeatures."${packageId}" or [];
+
+        buildByPackageIdImpl = packageId: test:
+          let
+              features = let f = if !test then mergedFeatures else mergedTestFeatures; in
+                f."${packageId}" or [];
               crateConfig = lib.filterAttrs (n: v: n != "resolvedDefaultFeatures") crateConfigs."${packageId}";
               dependencies =
-                dependencyDerivations builtByPackageId features (crateConfig.dependencies or []);
+                dependencyDerivations {
+                  inherit builtByPackageId features target;
+                  dependencies = crateConfig.dependencies or [];
+                };
               buildDependencies =
-                dependencyDerivations builtByPackageId features (crateConfig.buildDependencies or []);
+                dependencyDerivations {
+                  inherit builtByPackageId features target;
+                  dependencies = crateConfig.buildDependencies or [];
+                };
               dependenciesWithRenames =
                 lib.filter (d: d ? "rename")
                   (crateConfig.buildDependencies or [] ++ crateConfig.dependencies or []);
               crateRenames =
                 builtins.listToAttrs (map (d: { name = d.name; value = d.rename; }) dependenciesWithRenames);
-          in buildRustCrateFunc (crateConfig // { 
+          in buildRustCrateFunc (crateConfig // {
             src = crateConfig.src or (pkgs.fetchurl {
               name = "${crateConfig.crateName}-${crateConfig.version}.tar.gz";
               url = "https://crates.io/api/v1/crates/${crateConfig.crateName}/${crateConfig.version}/download";
               sha256 = crateConfig.sha256;
             });
-            inherit features dependencies buildDependencies crateRenames; 
+            inherit features dependencies buildDependencies crateRenames;
           });
     in builtByPackageId;
 
   /* Returns the actual derivations for the given dependencies. */
-  dependencyDerivations = builtByPackageId: features: dependencies:
+  dependencyDerivations =
+    { builtByPackageId
+    , features
+    , dependencies
+    , target
+    }:
     assert (builtins.isAttrs builtByPackageId);
     assert (builtins.isList features);
     assert (builtins.isList dependencies);
 
-    let enabledDependencies = filterEnabledDependencies dependencies features;
+    let enabledDependencies = filterEnabledDependencies { inherit dependencies features target; };
         depDerivation = dependency: builtByPackageId.${dependency.packageId};
     in map depDerivation enabledDependencies;
 
@@ -1963,7 +1985,7 @@ rec {
           then "function"
           else val;
 
-  debugCrate = {packageId}:
+  debugCrate = {packageId, target}:
     assert (builtins.isString packageId);
 
     rec {
@@ -1981,7 +2003,7 @@ rec {
             };
             inherit packageId;
         });
-        mergedPackageFeatures = mergePackageFeatures { inherit packageId; features = rootFeatures; };
+        mergedPackageFeatures = mergePackageFeatures { inherit packageId target; features = rootFeatures; };
         diffedDefaultPackageFeatures = diffDefaultPackageFeatures { inherit packageId;  features = rootFeatures; };
     };
 
@@ -1989,14 +2011,18 @@ rec {
    *
    * This is useful for verifying the feature resolution in crate2nix.
    */
-  diffDefaultPackageFeatures = {crateConfigs ? crates, packageId}:
+  diffDefaultPackageFeatures =
+    { crateConfigs ? crates
+    , packageId
+    , target
+    }:
     assert (builtins.isAttrs crateConfigs);
 
     let prefixValues = prefix: lib.mapAttrs (n: v: { "${prefix}" = v; });
         mergedFeatures =
           prefixValues
             "crate2nix"
-            (mergePackageFeatures {inherit crateConfigs packageId; features = ["default"]; });
+            (mergePackageFeatures {inherit crateConfigs packageId target; features = ["default"]; });
         configs = prefixValues "cargo" crateConfigs;
         combined = lib.foldAttrs (a: b: a // b) {} [ mergedFeatures configs ];
         onlyInCargo = builtins.attrNames (lib.filterAttrs (n: v: !(v ? "crate2nix" ) && (v ? "cargo")) combined);
@@ -2017,12 +2043,14 @@ rec {
      Returns multiple, potentially conflicting attribute sets for dependencies that are reachable
      by multiple paths in the dependency tree.
   */
+
   mergePackageFeatures = {
     crateConfigs ? crates,
     packageId,
     features ? rootFeatures,
     dependencyPath? [crates.${packageId}.crateName],
     featuresByPackageId? {},
+    target,
     ...} @ args:
     assert (builtins.isAttrs crateConfigs);
     assert (builtins.isString packageId);
@@ -2042,7 +2070,10 @@ rec {
           assert (builtins.isAttrs cache);
           assert (builtins.isList dependencies);
 
-          let enabledDependencies = filterEnabledDependencies dependencies expandedFeatures;
+          let enabledDependencies = filterEnabledDependencies {
+                inherit dependencies target;
+                features = expandedFeatures;
+              };
               directDependencies = map depWithResolvedFeatures enabledDependencies;
               foldOverCache = op: lib.foldl op cache directDependencies;
           in foldOverCache
@@ -2057,7 +2088,7 @@ rec {
                   dependencyPath = dependencyPath ++ [path crateConfigs.${packageId}.crateName];
                   features = combinedFeatures;
                   featuresByPackageId = cache;
-                  inherit crateConfigs packageId;
+                  inherit crateConfigs packageId target;
                  });
 
         cacheWithSelf =
@@ -2075,14 +2106,14 @@ rec {
     in cacheWithAll;
 
   /* Returns the enabled dependencies given the enabled features. */
-  filterEnabledDependencies = dependencies: features:
+  filterEnabledDependencies = {dependencies, features, target}:
     assert (builtins.isList dependencies);
     assert (builtins.isList features);
 
     lib.filter
       (dep:
         let targetFunc = dep.target or (features: true);
-        in targetFunc features
+        in targetFunc { inherit features target; }
            && (!(dep.optional or false) || builtins.any (doesFeatureEnableDependency dep.name) features))
       dependencies;
 
