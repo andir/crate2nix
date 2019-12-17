@@ -61,7 +61,8 @@ impl CrateDerivation {
             d.kind == DependencyKind::Normal || d.kind == DependencyKind::Unknown
         });
 
-        let dev_dependencies = resolved_dependencies.filtered_dependencies(|d| d.kind == DependencyKind::Development);
+        let dev_dependencies =
+            resolved_dependencies.filtered_dependencies(|d| d.kind == DependencyKind::Development);
 
         let package_path = package
             .manifest_path
