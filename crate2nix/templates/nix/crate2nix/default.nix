@@ -71,18 +71,27 @@ rec {
   /* Returns a crate which depends on successful test execution of crate given as the second argument */
   crateWithTest = crate: testCrate:
     let
-      test = (crate.overrideAttrs (old: {
+      # override the `crate` so that it will build and execute tests instead of
+      # building the actual lib and bin targets We just have to pass `--test`
+      # to rustc and it will do the right thing.  We execute the tests and copy
+      # their log and the test executables to $out for later inspection.
+      test = (testCrate.overrideAttrs (old: {
         name = "${old.name}-test";
         postBuild = ''
-          for file in target/lib/* target/bin/*; do
-            if [ -x "$file" ]; then
-              echo "Executing test $file"
-              $file 2>&1 | tee $TMP/tests.log || exit 1
-            fi
+          mkdir $TMP/tests
+          find target/lib target/bin -type f -executable -exec cp {} $TMP/tests/ \;
+          for file in $TMP/tests/*; do
+            echo "Executing test $file"
+            "$file" 2>&1 >> $TMP/tests.log || exit 1
           done
         '';
+        # remove any other outputs, this also purposely breaks using this as a
+        # rust library in case someone gets confused and passes this into
+        # `dependencies` of `buildRustCrate`.
         outputs = [ "out" ];
         installPhase = ''
+          mkdir -p $out
+          cp -rv $TMP/tests $out
           mv $TMP/tests.log $out
         '';
       })).override {
@@ -92,7 +101,6 @@ rec {
       checkPhase = ''
         test -e ${test}
       '';
-
       passthru = (old.passthru or {}) // {
         inherit test;
       };

@@ -10,37 +10,57 @@ let crate2nix = pkgs.callPackage ./default.nix {};
     buildTest = {
         name, src, cargoToml? "Cargo.toml", features? ["default"],
         expectedOutput,
+        expectedTestOutputs ? [],
         pregeneratedBuild? null,
         customBuild? pregeneratedBuild,
         derivationAttrPath? ["rootCrate"],
-        buildPhaseFunc ? (drv: expectedOutput: ''
-          mkdir -p $out
-          ${drv.crateName} >$out/test.log
-          echo grepping
-          grep '${expectedOutput}' $out/test.log || {
-            echo '${expectedOutput}' not found in:
-            cat $out/test.log
-            exit 23
-          }
-        '')
       }:
         let
-            nixBuild = if builtins.isNull pregeneratedBuild
-                    then tools.generated {
-                      name = "buildTest_test_${name}";
-                      inherit src cargoToml;
-                    }
-                    else pkgs.callPackage (./. + "/${customBuild}") {};
-            derivation = if pregeneratedBuild == customBuild then
-                           (lib.attrByPath derivationAttrPath null nixBuild).build.override {
-                             inherit features;
-                           }
-                           else nixBuild;
-        in pkgs.stdenv.mkDerivation {
+          nixBuild =
+            if builtins.isNull pregeneratedBuild
+              then
+                tools.generated {
+                  name = "buildTest_test_${name}";
+                  inherit src cargoToml;
+                }
+              else
+                pkgs.callPackage (./. + "/${customBuild}") {};
+
+          derivation =
+            if pregeneratedBuild == customBuild
+              then
+                (lib.attrByPath derivationAttrPath null nixBuild).build.override {
+                  inherit features;
+                }
+            else
+              nixBuild;
+        in
+          assert lib.length expectedTestOutputs > 0 -> derivation ? test;
+          pkgs.stdenv.mkDerivation {
             name = "buildTest_test_${name}";
             phases = [ "buildPhase" ];
             buildInputs = [ derivation ];
-            buildPhase = buildPhaseFunc derivation expectedOutput;
+            buildPhase = ''
+              mkdir -p $out
+              ${derivation.crateName} >$out/run.log
+              echo grepping
+              grep '${expectedOutput}' $out/run.log || {
+                echo '${expectedOutput}' not found in:
+                cat $out/run.log
+                exit 23
+              }
+
+              ${lib.optionalString (lib.length expectedTestOutputs > 0) ''
+                cp ${derivation.test}/tests.log $out/tests.log
+              ''}
+              ${lib.concatMapStringsSep "\n" (output: ''
+                grep '${output}' $out/tests.log || {
+                  echo '${output}' not found in:
+                  cat $out/tests.log
+                  exit 23
+                }
+              '') expectedTestOutputs}
+            '';
           };
 
      buildTestConfigs = [
@@ -105,25 +125,20 @@ let crate2nix = pkgs.callPackage ./default.nix {};
             cargoToml = "Cargo.toml";
             expectedOutput = "Hello, cfg-test!";
             pregeneratedBuild = "sample_projects/cfg-test/Cargo.nix";
-          }
+         }
 
          {
             name = "sample_project_cfg_test-with-tests";
             src = ./sample_projects/cfg-test;
             cargoToml = "Cargo.toml";
-            expectedOutput = "test cfg_test ... ok";
+            expectedOutput = "Hello, cfg-test!";
+            expectedTestOutputs = [
+              "test cfg_test ... ok"
+              "test lib_test ... ok"
+            ];
             customBuild = "sample_projects/cfg-test/test.nix";
             pregeneratedBuild = "sample_projects/cfg-test/Cargo.nix";
-            buildPhaseFunc = drv: expectedOutput: ''
-              grep '${expectedOutput}' ${drv.test}  || {
-                echo '${expectedOutput}' not found in test output:
-                cat ${drv.test}
-                exit 23
-              }
-              cp ${drv.test} $out
-            '';
          }
-
 
          {
             name = "sample_workspace";
