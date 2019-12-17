@@ -68,6 +68,8 @@ rec {
   # * `dependencies`/`buildDependencies`: similar to the corresponding fields for buildRustCrate.
   #   but with additional information which is used during dependency/feature resolution.
   # * `resolvedDependencies`: the selected default features reported by cargo - only included for debugging.
+  # * `devDependencies` as of now not used by `buildRustCrate` but used to
+  #   inject test dependencies into the build
 
   crates = {
     "actix-codec 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)"
@@ -352,6 +354,17 @@ rec {
             usesDefaultFeatures = false;
           }
         ];
+        devDependencies = [
+          {
+            name = "actix-connect";
+            packageId = "actix-connect 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)";
+            features = [ "ssl" ];
+          }
+          {
+            name = "tokio-tcp";
+            packageId = "tokio-tcp 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)";
+          }
+        ];
         features = {
           "brotli" = [ "brotli2" ];
           "fail" = [ "failure" ];
@@ -398,6 +411,12 @@ rec {
           {
             name = "string";
             packageId = "string 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)";
+          }
+        ];
+        devDependencies = [
+          {
+            name = "http";
+            packageId = "http 0.1.20 (registry+https://github.com/rust-lang/crates.io-index)";
           }
         ];
         features = {
@@ -1055,6 +1074,17 @@ rec {
           {
             name = "tokio-timer";
             packageId = "tokio-timer 0.2.12 (registry+https://github.com/rust-lang/crates.io-index)";
+          }
+        ];
+        devDependencies = [
+          {
+            name = "actix-http";
+            packageId = "actix-http 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)";
+            features = [ "ssl" ];
+          }
+          {
+            name = "rand";
+            packageId = "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)";
           }
         ];
         features = {
@@ -4205,6 +4235,12 @@ rec {
             target = {target, features}: (target."os" == "emscripten");
           }
         ];
+        devDependencies = [
+          {
+            name = "rand_hc";
+            packageId = "rand_hc 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)";
+          }
+        ];
         features = {
           "alloc" = [ "rand_core/alloc" ];
           "default" = [ "std" ];
@@ -4746,6 +4782,12 @@ rec {
             optional = true;
           }
         ];
+        devDependencies = [
+          {
+            name = "serde_derive";
+            packageId = "serde_derive 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)";
+          }
+        ];
         features = {
           "default" = [ "std" ];
           "derive" = [ "serde_derive" ];
@@ -4867,6 +4909,13 @@ rec {
           {
             name = "opaque-debug";
             packageId = "opaque-debug 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)";
+          }
+        ];
+        devDependencies = [
+          {
+            name = "digest";
+            packageId = "digest 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)";
+            features = [ "dev" ];
           }
         ];
         features = {
@@ -5115,6 +5164,12 @@ rec {
           }
         ];
         buildDependencies = [
+          {
+            name = "string_cache_codegen";
+            packageId = "string_cache_codegen 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)";
+          }
+        ];
+        devDependencies = [
           {
             name = "string_cache_codegen";
             packageId = "string_cache_codegen 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)";
@@ -5453,6 +5508,13 @@ rec {
             features = [ "std" "minwinbase" "minwindef" "ntdef" "profileapi" "sysinfoapi" "timezoneapi" ];
           }
         ];
+        devDependencies = [
+          {
+            name = "winapi";
+            packageId = "winapi 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)";
+            features = [ "std" "processthreadsapi" "winbase" ];
+          }
+        ];
         features = {
         };
       };
@@ -5514,6 +5576,12 @@ rec {
             name = "tokio-timer";
             packageId = "tokio-timer 0.2.12 (registry+https://github.com/rust-lang/crates.io-index)";
             optional = true;
+          }
+        ];
+        devDependencies = [
+          {
+            name = "num_cpus";
+            packageId = "num_cpus 1.11.1 (registry+https://github.com/rust-lang/crates.io-index)";
           }
         ];
         features = {
@@ -5753,6 +5821,12 @@ rec {
           {
             name = "tokio-sync";
             packageId = "tokio-sync 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)";
+          }
+        ];
+        devDependencies = [
+          {
+            name = "num_cpus";
+            packageId = "num_cpus 1.11.1 (registry+https://github.com/rust-lang/crates.io-index)";
           }
         ];
         features = {
@@ -6962,30 +7036,29 @@ rec {
     );
 
   /* Returns a crate which depends on successful test execution of crate given as the second argument */
-  crateWithTest = crate: testCrate:
+  crateWithTest = crate: testCrate: testCrateFlags:
     let
-      test = (crate.overrideAttrs (old: {
-        name = "${old.name}-test";
-        postBuild = ''
-          for file in target/lib/* target/bin/*; do
-            if [ -x "$file" ]; then
-              echo "Executing test $file"
-              $file 2>&1 | tee $TMP/tests.log || exit 1
-            fi
-          done
-        '';
-        outputs = [ "out" ];
-        installPhase = ''
-          mv $TMP/tests.log $out
-        '';
-      })).override {
-        extraRustcOpts = [ "--test" ];
-      };
+      # override the `crate` so that it will build and execute tests instead of
+      # building the actual lib and bin targets We just have to pass `--test`
+      # to rustc and it will do the right thing.  We execute the tests and copy
+      # their log and the test executables to $out for later inspection.
+      test = let
+        drv = testCrate.override (_: {
+          buildTests = true;
+        });
+      in pkgs.runCommand "run-tests-${testCrate.name}" {
+        inherit testCrateFlags;
+      } ''
+        set -ex
+        for file in ${drv}/tests/*; do
+          echo "Executing test $file" | tee >> $out
+          $file -- "$testCrateFlags" 2>&1 | tee >> $out
+        done
+      '';
     in crate.overrideAttrs (old: {
       checkPhase = ''
         test -e ${test}
       '';
-
       passthru = (old.passthru or {}) // {
         inherit test;
       };
@@ -6997,10 +7070,11 @@ rec {
     , features ? rootFeatures
     , crateOverrides ? defaultCrateOverrides
     , buildRustCrateFunc ? buildRustCrate
-    , doTest ? false,
+    , doTest ? false
+    , testCrateFlags ? []
     }:
     lib.makeOverridable
-      ({features, crateOverrides, doTest}:
+      ({features, crateOverrides, doTest, testCrateFlags}:
         let
           builtRustCrates = builtRustCratesWithFeatures {
             inherit packageId features crateOverrides buildRustCrateFunc;
@@ -7012,8 +7086,8 @@ rec {
           };
           drv = builtRustCrates.${packageId};
           testDrv = builtTestRustCrates.${packageId};
-        in if doTest then crateWithTest drv testDrv else drv)
-      { inherit features crateOverrides doTest; };
+        in if doTest then crateWithTest drv testDrv testCrateFlags else drv)
+      { inherit features crateOverrides doTest testCrateFlags; };
 
   /* Returns a buildRustCrate derivation for the given packageId and features. */
   builtRustCratesWithFeatures =
@@ -7030,7 +7104,11 @@ rec {
     assert (builtins.isList features);
     assert (builtins.isAttrs target);
 
-    let mergedFeatures = mergePackageFeatures ( args // { target = target // { test = doTest; }; });
+    let rootPackageId = packageId;
+        mergedFeatures = mergePackageFeatures (args // {
+          inherit rootPackageId;
+          target = target // { test = doTest; };
+        });
 
         buildByPackageId = packageId: buildByPackageIdImpl packageId;
 
@@ -7041,20 +7119,28 @@ rec {
         buildByPackageIdImpl = packageId:
           let
               features = mergedFeatures."${packageId}" or [];
-              crateConfig = lib.filterAttrs (n: v: n != "resolvedDefaultFeatures") crateConfigs."${packageId}";
+              crateConfig' = crateConfigs."${packageId}";
+              crateConfig = builtins.removeAttrs crateConfig' ["resolvedDefaultFeatures" "devDependencies"];
+              devDependencies = lib.optionals (doTest && packageId == rootPackageId) (crateConfig'.devDependencies or []);
               dependencies =
                 dependencyDerivations {
                   inherit builtByPackageId features target;
-                  dependencies = crateConfig.dependencies or [];
+                  dependencies =
+                   (crateConfig.dependencies or [])
+                    ++ devDependencies;
                 };
               buildDependencies =
                 dependencyDerivations {
                   inherit builtByPackageId features target;
                   dependencies = crateConfig.buildDependencies or [];
                 };
+
               dependenciesWithRenames =
-                lib.filter (d: d ? "rename")
-                  (crateConfig.buildDependencies or [] ++ crateConfig.dependencies or []);
+                lib.filter (d: d ? "rename") (
+                  (crateConfig.buildDependencies or [])
+                  ++ (crateConfig.dependencies or [])
+                  ++ devDependencies);
+
               crateRenames =
                 builtins.listToAttrs (map (d: { name = d.name; value = d.rename; }) dependenciesWithRenames);
           in buildRustCrateFunc (crateConfig // {
@@ -7153,10 +7239,12 @@ rec {
   mergePackageFeatures = {
     crateConfigs ? crates,
     packageId,
+    rootPackageId,
     features ? rootFeatures,
     dependencyPath? [crates.${packageId}.crateName],
     featuresByPackageId? {},
     target,
+    doTest,
     ...} @ args:
     assert (builtins.isAttrs crateConfigs);
     assert (builtins.isString packageId);
@@ -7194,7 +7282,7 @@ rec {
                   dependencyPath = dependencyPath ++ [path crateConfigs.${packageId}.crateName];
                   features = combinedFeatures;
                   featuresByPackageId = cache;
-                  inherit crateConfigs packageId target;
+                  inherit crateConfigs packageId target doTest rootPackageId;
                  });
 
         cacheWithSelf =
@@ -7205,7 +7293,10 @@ rec {
             };
 
         cacheWithDependencies =
-            resolveDependencies cacheWithSelf "dep" (crateConfig.dependencies or []);
+            resolveDependencies cacheWithSelf "dep" (
+              crateConfig.dependencies or []
+              ++ lib.optionals (doTest && packageId == rootPackageId) (crateConfig.devDependencies or [])
+        );
         cacheWithAll =
             resolveDependencies cacheWithDependencies "build" (crateConfig.buildDependencies or []);
 

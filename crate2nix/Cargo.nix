@@ -68,6 +68,8 @@ rec {
   # * `dependencies`/`buildDependencies`: similar to the corresponding fields for buildRustCrate.
   #   but with additional information which is used during dependency/feature resolution.
   # * `resolvedDependencies`: the selected default features reported by cargo - only included for debugging.
+  # * `devDependencies` as of now not used by `buildRustCrate` but used to
+  #   inject test dependencies into the build
 
   crates = {
     "aho-corasick 0.7.6 (registry+https://github.com/rust-lang/crates.io-index)"
@@ -568,6 +570,33 @@ rec {
         features = {
         };
       };
+    "colored-diff 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)"
+      = rec {
+        crateName = "colored-diff";
+        version = "0.2.2";
+        edition = "2015";
+        sha256 = "1zbfjkp7w1wjcxb1p19dd21mn9xkj6nr2s5pav8b16whzh52cvsi";
+        authors = [
+          "Christopher Durham <cad97@cad97.com>"
+        ];
+        dependencies = [
+          {
+            name = "ansi_term";
+            packageId = "ansi_term 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)";
+          }
+          {
+            name = "difference";
+            packageId = "difference 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)";
+          }
+          {
+            name = "itertools";
+            packageId = "itertools 0.7.11 (registry+https://github.com/rust-lang/crates.io-index)";
+            usesDefaultFeatures = false;
+          }
+        ];
+        features = {
+        };
+      };
     "crate2nix 0.7.0-alpha.4 (path+file:///home/andi/dev/tweag/sc/crate2nix/crate2nix)"
       = rec {
         crateName = "crate2nix";
@@ -645,6 +674,20 @@ rec {
           {
             name = "url_serde";
             packageId = "url_serde 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)";
+          }
+        ];
+        devDependencies = [
+          {
+            name = "colored-diff";
+            packageId = "colored-diff 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)";
+          }
+          {
+            name = "fs_extra";
+            packageId = "fs_extra 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)";
+          }
+          {
+            name = "tempdir";
+            packageId = "tempdir 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)";
           }
         ];
         features = {
@@ -826,6 +869,22 @@ rec {
         ];
         features = {
         };
+      };
+    "difference 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)"
+      = rec {
+        crateName = "difference";
+        version = "2.0.0";
+        edition = "2015";
+        # Hack to suppress building binaries
+        crateBin = [{name = ","; path = ",";}];
+        sha256 = "1621wx4k8h452p6xzmzzvm7mz87kxh4yqz0kzxfjj9xmjxlbyk2j";
+        authors = [
+          "Johann Hofmann <mail@johann-hofmann.com>"
+        ];
+        features = {
+          "bin" = [ "getopts" ];
+        };
+        resolvedDefaultFeatures = [ "default" ];
       };
     "digest 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)"
       = rec {
@@ -1027,6 +1086,30 @@ rec {
         libPath = "lib.rs";
         authors = [
           "Alex Crichton <alex@alexcrichton.com>"
+        ];
+        features = {
+        };
+      };
+    "fs_extra 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)"
+      = rec {
+        crateName = "fs_extra";
+        version = "1.1.0";
+        edition = "2015";
+        sha256 = "0x6675wdhsx277k1k1235jwcv38naf20d8kwrk948ds26hh4lajz";
+        authors = [
+          "Denis Kurilenko <webdesus@gmail.com>"
+        ];
+        features = {
+        };
+      };
+    "fuchsia-cprng 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)"
+      = rec {
+        crateName = "fuchsia-cprng";
+        version = "0.1.1";
+        edition = "2018";
+        sha256 = "1fnkqrbz7ixxzsb04bsz9p0zzazanma8znfdqjvh39n14vapfvx0";
+        authors = [
+          "Erick Tryzelaar <etryzelaar@google.com>"
         ];
         features = {
         };
@@ -1326,6 +1409,26 @@ rec {
         ];
         features = {
           "simd-accel" = [ "globset/simd-accel" ];
+        };
+      };
+    "itertools 0.7.11 (registry+https://github.com/rust-lang/crates.io-index)"
+      = rec {
+        crateName = "itertools";
+        version = "0.7.11";
+        edition = "2015";
+        sha256 = "03cpsj26xmyamcalclqzr1i700vwx8hnbgxbpjvs354f8mnr8iqd";
+        authors = [
+          "bluss"
+        ];
+        dependencies = [
+          {
+            name = "either";
+            packageId = "either 1.5.3 (registry+https://github.com/rust-lang/crates.io-index)";
+            usesDefaultFeatures = false;
+          }
+        ];
+        features = {
+          "default" = [ "use_std" ];
         };
       };
     "itertools 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)"
@@ -1898,6 +2001,52 @@ rec {
         };
         resolvedDefaultFeatures = [ "default" "proc-macro" ];
       };
+    "rand 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)"
+      = rec {
+        crateName = "rand";
+        version = "0.4.6";
+        edition = "2015";
+        sha256 = "14qjfv3gggzhnma20k0sc1jf8y6pplsaq7n1j9ls5c8kf2wl0a2m";
+        authors = [
+          "The Rust Project Developers"
+        ];
+        dependencies = [
+          {
+            name = "fuchsia-cprng";
+            packageId = "fuchsia-cprng 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)";
+            target = {target, features}: (target."os" == "fuchsia");
+          }
+          {
+            name = "libc";
+            packageId = "libc 0.2.66 (registry+https://github.com/rust-lang/crates.io-index)";
+            optional = true;
+            target = {target, features}: target."unix";
+          }
+          {
+            name = "rand_core";
+            packageId = "rand_core 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)";
+            usesDefaultFeatures = false;
+            target = {target, features}: (target."env" == "sgx");
+          }
+          {
+            name = "rdrand";
+            packageId = "rdrand 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)";
+            target = {target, features}: (target."env" == "sgx");
+          }
+          {
+            name = "winapi";
+            packageId = "winapi 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)";
+            target = {target, features}: target."windows";
+            features = [ "minwindef" "ntsecapi" "profileapi" "winnt" ];
+          }
+        ];
+        features = {
+          "default" = [ "std" ];
+          "nightly" = [ "i128_support" ];
+          "std" = [ "libc" ];
+        };
+        resolvedDefaultFeatures = [ "default" "libc" "std" ];
+      };
     "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)"
       = rec {
         crateName = "rand";
@@ -1935,6 +2084,12 @@ rec {
             name = "rand_hc";
             packageId = "rand_hc 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)";
             target = {target, features}: (target."os" == "emscripten");
+          }
+        ];
+        devDependencies = [
+          {
+            name = "rand_hc";
+            packageId = "rand_hc 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)";
           }
         ];
         features = {
@@ -1978,6 +2133,44 @@ rec {
           "std" = [ "c2-chacha/std" ];
         };
         resolvedDefaultFeatures = [ "std" ];
+      };
+    "rand_core 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)"
+      = rec {
+        crateName = "rand_core";
+        version = "0.3.1";
+        edition = "2015";
+        sha256 = "0jzdgszfa4bliigiy4hi66k7fs3gfwi2qxn8vik84ph77fwdwvvs";
+        authors = [
+          "The Rand Project Developers"
+          "The Rust Project Developers"
+        ];
+        dependencies = [
+          {
+            name = "rand_core";
+            packageId = "rand_core 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)";
+          }
+        ];
+        features = {
+          "alloc" = [ "rand_core/alloc" ];
+          "default" = [ "std" ];
+          "serde1" = [ "rand_core/serde1" ];
+          "std" = [ "rand_core/std" ];
+        };
+      };
+    "rand_core 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)"
+      = rec {
+        crateName = "rand_core";
+        version = "0.4.2";
+        edition = "2015";
+        sha256 = "1p09ynysrq1vcdlmcqnapq4qakl2yd1ng3kxh3qscpx09k2a6cww";
+        authors = [
+          "The Rand Project Developers"
+          "The Rust Project Developers"
+        ];
+        features = {
+          "serde1" = [ "serde" "serde_derive" ];
+          "std" = [ "alloc" ];
+        };
       };
     "rand_core 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)"
       = rec {
@@ -2082,6 +2275,27 @@ rec {
         ];
         features = {
         };
+      };
+    "rdrand 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)"
+      = rec {
+        crateName = "rdrand";
+        version = "0.4.0";
+        edition = "2015";
+        sha256 = "1cjq0kwx1bk7jx3kzyciiish5gqsj7620dm43dc52sr8fzmm9037";
+        authors = [
+          "Simonas Kazlauskas <rdrand@kazlauskas.me>"
+        ];
+        dependencies = [
+          {
+            name = "rand_core";
+            packageId = "rand_core 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)";
+            usesDefaultFeatures = false;
+          }
+        ];
+        features = {
+          "default" = [ "std" ];
+        };
+        resolvedDefaultFeatures = [ "default" "std" ];
       };
     "redox_syscall 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)"
       = rec {
@@ -2310,6 +2524,12 @@ rec {
             optional = true;
           }
         ];
+        devDependencies = [
+          {
+            name = "serde_derive";
+            packageId = "serde_derive 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)";
+          }
+        ];
         features = {
           "default" = [ "std" ];
           "derive" = [ "serde_derive" ];
@@ -2401,6 +2621,13 @@ rec {
           {
             name = "opaque-debug";
             packageId = "opaque-debug 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)";
+          }
+        ];
+        devDependencies = [
+          {
+            name = "digest";
+            packageId = "digest 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)";
+            features = [ "dev" ];
           }
         ];
         features = {
@@ -2623,6 +2850,28 @@ rec {
         };
         resolvedDefaultFeatures = [ "default" "proc-macro" ];
       };
+    "tempdir 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)"
+      = rec {
+        crateName = "tempdir";
+        version = "0.3.7";
+        edition = "2015";
+        sha256 = "1n5n86zxpgd85y0mswrp5cfdisizq2rv3la906g6ipyc03xvbwhm";
+        authors = [
+          "The Rust Project Developers"
+        ];
+        dependencies = [
+          {
+            name = "rand";
+            packageId = "rand 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)";
+          }
+          {
+            name = "remove_dir_all";
+            packageId = "remove_dir_all 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)";
+          }
+        ];
+        features = {
+        };
+      };
     "tera 1.0.0-beta.20 (registry+https://github.com/rust-lang/crates.io-index)"
       = rec {
         crateName = "tera";
@@ -2783,6 +3032,13 @@ rec {
             packageId = "winapi 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)";
             target = {target, features}: target."windows";
             features = [ "std" "minwinbase" "minwindef" "ntdef" "profileapi" "sysinfoapi" "timezoneapi" ];
+          }
+        ];
+        devDependencies = [
+          {
+            name = "winapi";
+            packageId = "winapi 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)";
+            features = [ "std" "processthreadsapi" "winbase" ];
           }
         ];
         features = {
@@ -3345,30 +3601,29 @@ rec {
     );
 
   /* Returns a crate which depends on successful test execution of crate given as the second argument */
-  crateWithTest = crate: testCrate:
+  crateWithTest = crate: testCrate: testCrateFlags:
     let
-      test = (crate.overrideAttrs (old: {
-        name = "${old.name}-test";
-        postBuild = ''
-          for file in target/lib/* target/bin/*; do
-            if [ -x "$file" ]; then
-              echo "Executing test $file"
-              $file 2>&1 | tee $TMP/tests.log || exit 1
-            fi
-          done
-        '';
-        outputs = [ "out" ];
-        installPhase = ''
-          mv $TMP/tests.log $out
-        '';
-      })).override {
-        extraRustcOpts = [ "--test" ];
-      };
+      # override the `crate` so that it will build and execute tests instead of
+      # building the actual lib and bin targets We just have to pass `--test`
+      # to rustc and it will do the right thing.  We execute the tests and copy
+      # their log and the test executables to $out for later inspection.
+      test = let
+        drv = testCrate.override (_: {
+          buildTests = true;
+        });
+      in pkgs.runCommand "run-tests-${testCrate.name}" {
+        inherit testCrateFlags;
+      } ''
+        set -ex
+        for file in ${drv}/tests/*; do
+          echo "Executing test $file" | tee >> $out
+          $file -- "$testCrateFlags" 2>&1 | tee >> $out
+        done
+      '';
     in crate.overrideAttrs (old: {
       checkPhase = ''
         test -e ${test}
       '';
-
       passthru = (old.passthru or {}) // {
         inherit test;
       };
@@ -3380,10 +3635,11 @@ rec {
     , features ? rootFeatures
     , crateOverrides ? defaultCrateOverrides
     , buildRustCrateFunc ? buildRustCrate
-    , doTest ? false,
+    , doTest ? false
+    , testCrateFlags ? []
     }:
     lib.makeOverridable
-      ({features, crateOverrides, doTest}:
+      ({features, crateOverrides, doTest, testCrateFlags}:
         let
           builtRustCrates = builtRustCratesWithFeatures {
             inherit packageId features crateOverrides buildRustCrateFunc;
@@ -3395,8 +3651,8 @@ rec {
           };
           drv = builtRustCrates.${packageId};
           testDrv = builtTestRustCrates.${packageId};
-        in if doTest then crateWithTest drv testDrv else drv)
-      { inherit features crateOverrides doTest; };
+        in if doTest then crateWithTest drv testDrv testCrateFlags else drv)
+      { inherit features crateOverrides doTest testCrateFlags; };
 
   /* Returns a buildRustCrate derivation for the given packageId and features. */
   builtRustCratesWithFeatures =
@@ -3413,7 +3669,11 @@ rec {
     assert (builtins.isList features);
     assert (builtins.isAttrs target);
 
-    let mergedFeatures = mergePackageFeatures ( args // { target = target // { test = doTest; }; });
+    let rootPackageId = packageId;
+        mergedFeatures = mergePackageFeatures (args // {
+          inherit rootPackageId;
+          target = target // { test = doTest; };
+        });
 
         buildByPackageId = packageId: buildByPackageIdImpl packageId;
 
@@ -3424,20 +3684,28 @@ rec {
         buildByPackageIdImpl = packageId:
           let
               features = mergedFeatures."${packageId}" or [];
-              crateConfig = lib.filterAttrs (n: v: n != "resolvedDefaultFeatures") crateConfigs."${packageId}";
+              crateConfig' = crateConfigs."${packageId}";
+              crateConfig = builtins.removeAttrs crateConfig' ["resolvedDefaultFeatures" "devDependencies"];
+              devDependencies = lib.optionals (doTest && packageId == rootPackageId) (crateConfig'.devDependencies or []);
               dependencies =
                 dependencyDerivations {
                   inherit builtByPackageId features target;
-                  dependencies = crateConfig.dependencies or [];
+                  dependencies =
+                   (crateConfig.dependencies or [])
+                    ++ devDependencies;
                 };
               buildDependencies =
                 dependencyDerivations {
                   inherit builtByPackageId features target;
                   dependencies = crateConfig.buildDependencies or [];
                 };
+
               dependenciesWithRenames =
-                lib.filter (d: d ? "rename")
-                  (crateConfig.buildDependencies or [] ++ crateConfig.dependencies or []);
+                lib.filter (d: d ? "rename") (
+                  (crateConfig.buildDependencies or [])
+                  ++ (crateConfig.dependencies or [])
+                  ++ devDependencies);
+
               crateRenames =
                 builtins.listToAttrs (map (d: { name = d.name; value = d.rename; }) dependenciesWithRenames);
           in buildRustCrateFunc (crateConfig // {
@@ -3536,10 +3804,12 @@ rec {
   mergePackageFeatures = {
     crateConfigs ? crates,
     packageId,
+    rootPackageId,
     features ? rootFeatures,
     dependencyPath? [crates.${packageId}.crateName],
     featuresByPackageId? {},
     target,
+    doTest,
     ...} @ args:
     assert (builtins.isAttrs crateConfigs);
     assert (builtins.isString packageId);
@@ -3577,7 +3847,7 @@ rec {
                   dependencyPath = dependencyPath ++ [path crateConfigs.${packageId}.crateName];
                   features = combinedFeatures;
                   featuresByPackageId = cache;
-                  inherit crateConfigs packageId target;
+                  inherit crateConfigs packageId target doTest rootPackageId;
                  });
 
         cacheWithSelf =
@@ -3588,7 +3858,10 @@ rec {
             };
 
         cacheWithDependencies =
-            resolveDependencies cacheWithSelf "dep" (crateConfig.dependencies or []);
+            resolveDependencies cacheWithSelf "dep" (
+              crateConfig.dependencies or []
+              ++ lib.optionals (doTest && packageId == rootPackageId) (crateConfig.devDependencies or [])
+        );
         cacheWithAll =
             resolveDependencies cacheWithDependencies "build" (crateConfig.buildDependencies or []);
 

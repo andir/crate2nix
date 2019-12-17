@@ -68,6 +68,8 @@ rec {
   # * `dependencies`/`buildDependencies`: similar to the corresponding fields for buildRustCrate.
   #   but with additional information which is used during dependency/feature resolution.
   # * `resolvedDependencies`: the selected default features reported by cargo - only included for debugging.
+  # * `devDependencies` as of now not used by `buildRustCrate` but used to
+  #   inject test dependencies into the build
 
   crates = {
     "bin_with_rerenamed_lib_dep 0.1.0 (path+file:///home/andi/dev/tweag/sc/crate2nix/sample_projects/bin_with_rerenamed_lib_dep)"
@@ -175,30 +177,29 @@ rec {
     );
 
   /* Returns a crate which depends on successful test execution of crate given as the second argument */
-  crateWithTest = crate: testCrate:
+  crateWithTest = crate: testCrate: testCrateFlags:
     let
-      test = (crate.overrideAttrs (old: {
-        name = "${old.name}-test";
-        postBuild = ''
-          for file in target/lib/* target/bin/*; do
-            if [ -x "$file" ]; then
-              echo "Executing test $file"
-              $file 2>&1 | tee $TMP/tests.log || exit 1
-            fi
-          done
-        '';
-        outputs = [ "out" ];
-        installPhase = ''
-          mv $TMP/tests.log $out
-        '';
-      })).override {
-        extraRustcOpts = [ "--test" ];
-      };
+      # override the `crate` so that it will build and execute tests instead of
+      # building the actual lib and bin targets We just have to pass `--test`
+      # to rustc and it will do the right thing.  We execute the tests and copy
+      # their log and the test executables to $out for later inspection.
+      test = let
+        drv = testCrate.override (_: {
+          buildTests = true;
+        });
+      in pkgs.runCommand "run-tests-${testCrate.name}" {
+        inherit testCrateFlags;
+      } ''
+        set -ex
+        for file in ${drv}/tests/*; do
+          echo "Executing test $file" | tee >> $out
+          $file -- "$testCrateFlags" 2>&1 | tee >> $out
+        done
+      '';
     in crate.overrideAttrs (old: {
       checkPhase = ''
         test -e ${test}
       '';
-
       passthru = (old.passthru or {}) // {
         inherit test;
       };
@@ -210,10 +211,11 @@ rec {
     , features ? rootFeatures
     , crateOverrides ? defaultCrateOverrides
     , buildRustCrateFunc ? buildRustCrate
-    , doTest ? false,
+    , doTest ? false
+    , testCrateFlags ? []
     }:
     lib.makeOverridable
-      ({features, crateOverrides, doTest}:
+      ({features, crateOverrides, doTest, testCrateFlags}:
         let
           builtRustCrates = builtRustCratesWithFeatures {
             inherit packageId features crateOverrides buildRustCrateFunc;
@@ -225,8 +227,8 @@ rec {
           };
           drv = builtRustCrates.${packageId};
           testDrv = builtTestRustCrates.${packageId};
-        in if doTest then crateWithTest drv testDrv else drv)
-      { inherit features crateOverrides doTest; };
+        in if doTest then crateWithTest drv testDrv testCrateFlags else drv)
+      { inherit features crateOverrides doTest testCrateFlags; };
 
   /* Returns a buildRustCrate derivation for the given packageId and features. */
   builtRustCratesWithFeatures =
@@ -243,7 +245,11 @@ rec {
     assert (builtins.isList features);
     assert (builtins.isAttrs target);
 
-    let mergedFeatures = mergePackageFeatures ( args // { target = target // { test = doTest; }; });
+    let rootPackageId = packageId;
+        mergedFeatures = mergePackageFeatures (args // {
+          inherit rootPackageId;
+          target = target // { test = doTest; };
+        });
 
         buildByPackageId = packageId: buildByPackageIdImpl packageId;
 
@@ -254,20 +260,28 @@ rec {
         buildByPackageIdImpl = packageId:
           let
               features = mergedFeatures."${packageId}" or [];
-              crateConfig = lib.filterAttrs (n: v: n != "resolvedDefaultFeatures") crateConfigs."${packageId}";
+              crateConfig' = crateConfigs."${packageId}";
+              crateConfig = builtins.removeAttrs crateConfig' ["resolvedDefaultFeatures" "devDependencies"];
+              devDependencies = lib.optionals (doTest && packageId == rootPackageId) (crateConfig'.devDependencies or []);
               dependencies =
                 dependencyDerivations {
                   inherit builtByPackageId features target;
-                  dependencies = crateConfig.dependencies or [];
+                  dependencies =
+                   (crateConfig.dependencies or [])
+                    ++ devDependencies;
                 };
               buildDependencies =
                 dependencyDerivations {
                   inherit builtByPackageId features target;
                   dependencies = crateConfig.buildDependencies or [];
                 };
+
               dependenciesWithRenames =
-                lib.filter (d: d ? "rename")
-                  (crateConfig.buildDependencies or [] ++ crateConfig.dependencies or []);
+                lib.filter (d: d ? "rename") (
+                  (crateConfig.buildDependencies or [])
+                  ++ (crateConfig.dependencies or [])
+                  ++ devDependencies);
+
               crateRenames =
                 builtins.listToAttrs (map (d: { name = d.name; value = d.rename; }) dependenciesWithRenames);
           in buildRustCrateFunc (crateConfig // {
@@ -366,10 +380,12 @@ rec {
   mergePackageFeatures = {
     crateConfigs ? crates,
     packageId,
+    rootPackageId,
     features ? rootFeatures,
     dependencyPath? [crates.${packageId}.crateName],
     featuresByPackageId? {},
     target,
+    doTest,
     ...} @ args:
     assert (builtins.isAttrs crateConfigs);
     assert (builtins.isString packageId);
@@ -407,7 +423,7 @@ rec {
                   dependencyPath = dependencyPath ++ [path crateConfigs.${packageId}.crateName];
                   features = combinedFeatures;
                   featuresByPackageId = cache;
-                  inherit crateConfigs packageId target;
+                  inherit crateConfigs packageId target doTest rootPackageId;
                  });
 
         cacheWithSelf =
@@ -418,7 +434,10 @@ rec {
             };
 
         cacheWithDependencies =
-            resolveDependencies cacheWithSelf "dep" (crateConfig.dependencies or []);
+            resolveDependencies cacheWithSelf "dep" (
+              crateConfig.dependencies or []
+              ++ lib.optionals (doTest && packageId == rootPackageId) (crateConfig.devDependencies or [])
+        );
         cacheWithAll =
             resolveDependencies cacheWithDependencies "build" (crateConfig.buildDependencies or []);
 
