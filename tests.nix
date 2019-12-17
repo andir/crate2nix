@@ -12,7 +12,18 @@ let crate2nix = pkgs.callPackage ./default.nix {};
         expectedOutput,
         pregeneratedBuild? null,
         customBuild? pregeneratedBuild,
-        derivationAttrPath? ["rootCrate"]}:
+        derivationAttrPath? ["rootCrate"],
+        buildPhaseFunc ? (drv: expectedOutput: ''
+          mkdir -p $out
+          ${drv.crateName} >$out/test.log
+          echo grepping
+          grep '${expectedOutput}' $out/test.log || {
+            echo '${expectedOutput}' not found in:
+            cat $out/test.log
+            exit 23
+          }
+        '')
+      }:
         let
             nixBuild = if builtins.isNull pregeneratedBuild
                     then tools.generated {
@@ -24,21 +35,12 @@ let crate2nix = pkgs.callPackage ./default.nix {};
                            (lib.attrByPath derivationAttrPath null nixBuild).build.override {
                              inherit features;
                            }
-                         else nixBuild;
+                           else nixBuild;
         in pkgs.stdenv.mkDerivation {
             name = "buildTest_test_${name}";
             phases = [ "buildPhase" ];
             buildInputs = [ derivation ];
-            buildPhase = ''
-              mkdir -p $out
-              ${derivation.crateName} >$out/test.log
-              echo grepping
-              grep '${expectedOutput}' $out/test.log || {
-                echo '${expectedOutput}' not found in:
-                cat $out/test.log
-                exit 23
-              }
-            '';
+            buildPhase = buildPhaseFunc derivation expectedOutput;
           };
 
      buildTestConfigs = [
@@ -109,9 +111,17 @@ let crate2nix = pkgs.callPackage ./default.nix {};
             name = "sample_project_cfg_test-with-tests";
             src = ./sample_projects/cfg-test;
             cargoToml = "Cargo.toml";
-            expectedOutput = "Hello, cfg-test!";
+            expectedOutput = "test cfg_test ... ok";
             customBuild = "sample_projects/cfg-test/test.nix";
             pregeneratedBuild = "sample_projects/cfg-test/Cargo.nix";
+            buildPhaseFunc = drv: expectedOutput: ''
+              grep '${expectedOutput}' ${drv.test}  || {
+                echo '${expectedOutput}' not found in test output:
+                cat ${drv.test}
+                exit 23
+              }
+              cp ${drv.test} $out
+            '';
          }
 
 
