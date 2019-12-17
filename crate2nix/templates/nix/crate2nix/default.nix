@@ -69,46 +69,25 @@ rec {
     );
 
   /* Returns a crate which depends on successful test execution of crate given as the second argument */
-  crateWithTest = crate: testCrate:
+  crateWithTest = crate: testCrate: testCrateFlags:
     let
       # override the `crate` so that it will build and execute tests instead of
       # building the actual lib and bin targets We just have to pass `--test`
       # to rustc and it will do the right thing.  We execute the tests and copy
       # their log and the test executables to $out for later inspection.
-      test = (testCrate.overrideAttrs (old: {
-        name = "${old.name}-test";
-        preBuild = ''
-          ls -la ${lib.getLib testCrate}
-          cp ${lib.getLib testCrate}/lib/* target/lib
-          chmod +rw target/lib/*
-        '';
-
-        postBuild = ''
-          # execute builds for every file in tests/ since those aren't handled by the nixpkgs expression right now
-          for file in $(find tests/ -type f -name '*.rs'); do
-            fn=''${file%.rs}
-            build_bin "''${fn//\//-}" "$file"
-          done
-
-          # execute all the tests
-          IFS=$'\n'; set -f
-          for file in $(find target/lib target/bin -type f -executable); do
-            echo "Executing test $file" | tee -a $TMP/tests.log
-            "$file" 2>&1 | tee -a $TMP/tests.log || exit 1
-          done
-          unset IFS; set +f
-        '';
-        # remove any other outputs, this also purposely breaks using this as a
-        # rust library in case someone gets confused and passes this into
-        # `dependencies` of `buildRustCrate`.
-        outputs = [ "out" ];
-        installPhase = ''
-          mkdir -p $out
-          mv $TMP/tests.log $out
-        '';
-      })).override {
-        extraRustcOpts = [ "--test" ];
-      };
+      test = let
+        drv = testCrate.override (_: {
+          buildTests = true;
+        });
+      in pkgs.runCommand "run-tests-${testCrate.name}" {
+        inherit testCrateFlags;
+      } ''
+        set -ex
+        for file in ${drv}/tests/*; do
+          echo "Executing test $file" | tee >> $out
+          $file -- "$testCrateFlags" 2>&1 | tee >> $out
+        done
+      '';
     in crate.overrideAttrs (old: {
       checkPhase = ''
         test -e ${test}
@@ -124,10 +103,11 @@ rec {
     , features ? rootFeatures
     , crateOverrides ? defaultCrateOverrides
     , buildRustCrateFunc ? buildRustCrate
-    , doTest ? false,
+    , doTest ? false
+    , testCrateFlags ? []
     }:
     lib.makeOverridable
-      ({features, crateOverrides, doTest}:
+      ({features, crateOverrides, doTest, testCrateFlags}:
         let
           builtRustCrates = builtRustCratesWithFeatures {
             inherit packageId features crateOverrides buildRustCrateFunc;
@@ -139,8 +119,8 @@ rec {
           };
           drv = builtRustCrates.${packageId};
           testDrv = builtTestRustCrates.${packageId};
-        in if doTest then crateWithTest drv testDrv else drv)
-      { inherit features crateOverrides doTest; };
+        in if doTest then crateWithTest drv testDrv testCrateFlags else drv)
+      { inherit features crateOverrides doTest testCrateFlags; };
 
   /* Returns a buildRustCrate derivation for the given packageId and features. */
   builtRustCratesWithFeatures =
@@ -157,7 +137,7 @@ rec {
     assert (builtins.isList features);
     assert (builtins.isAttrs target);
 
-    let rootPackageId = lib.traceVal packageId;
+    let rootPackageId = packageId;
         mergedFeatures = mergePackageFeatures (args // {
           inherit rootPackageId;
           target = target // { test = doTest; };
