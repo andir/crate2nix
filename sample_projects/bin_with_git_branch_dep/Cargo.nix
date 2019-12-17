@@ -20,7 +20,7 @@ rec {
   #
 
   rootCrate = rec {
-    packageId = "bin_with_lib_git_dep 0.1.0 (path+file:///home/peter/projects/crate2nix/sample_projects/bin_with_git_branch_dep)";
+    packageId = "bin_with_lib_git_dep 0.1.0 (path+file:///home/andi/dev/tweag/sc/crate2nix/sample_projects/bin_with_git_branch_dep)";
 
     # Use this attribute to refer to the derivation building your root crate package.
     # You can override the features with rootCrate.build.override { features = [ "default" "feature1" ... ]; }.
@@ -40,9 +40,9 @@ rec {
   # workspaceMembers."${crateName}".build.override { features = [ "default" "feature1" ... ]; }.
   workspaceMembers = {
     "bin_with_lib_git_dep" = rec {
-      packageId = "bin_with_lib_git_dep 0.1.0 (path+file:///home/peter/projects/crate2nix/sample_projects/bin_with_git_branch_dep)";
+      packageId = "bin_with_lib_git_dep 0.1.0 (path+file:///home/andi/dev/tweag/sc/crate2nix/sample_projects/bin_with_git_branch_dep)";
       build = buildRustCrateWithFeatures {
-        packageId = "bin_with_lib_git_dep 0.1.0 (path+file:///home/peter/projects/crate2nix/sample_projects/bin_with_git_branch_dep)";
+        packageId = "bin_with_lib_git_dep 0.1.0 (path+file:///home/andi/dev/tweag/sc/crate2nix/sample_projects/bin_with_git_branch_dep)";
         features = rootFeatures;
       };
       
@@ -70,7 +70,7 @@ rec {
   # * `resolvedDependencies`: the selected default features reported by cargo - only included for debugging.
 
   crates = {
-    "bin_with_lib_git_dep 0.1.0 (path+file:///home/peter/projects/crate2nix/sample_projects/bin_with_git_branch_dep)"
+    "bin_with_lib_git_dep 0.1.0 (path+file:///home/andi/dev/tweag/sc/crate2nix/sample_projects/bin_with_git_branch_dep)"
       = rec {
         crateName = "bin_with_lib_git_dep";
         version = "0.1.0";
@@ -176,6 +176,36 @@ rec {
       baseName == "tests.nix"
     );
 
+  /* Returns a crate which depends on successful test execution of crate given as the second argument */
+  crateWithTest = crate: testCrate:
+    let
+      test = (crate.overrideAttrs (old: {
+        name = "${old.name}-test";
+        postBuild = ''
+          for file in target/lib/* target/bin/*; do
+            if [ -x "$file" ]; then
+              echo "Executing test $file"
+              $file 2>&1 | tee $TMP/tests.log || exit 1
+            fi
+          done
+        '';
+        outputs = [ "out" ];
+        installPhase = ''
+          mv $TMP/tests.log $out
+        '';
+      })).override {
+        extraRustcOpts = [ "--test" ];
+      };
+    in crate.overrideAttrs (old: {
+      checkPhase = ''
+        test -e ${test}
+      '';
+
+      passthru = (old.passthru or {}) // {
+        inherit test;
+      };
+    });
+
   /* A restricted overridable version of  buildRustCrateWithFeaturesImpl. */
   buildRustCrateWithFeatures =
     { packageId
@@ -186,10 +216,18 @@ rec {
     }:
     lib.makeOverridable
       ({features, crateOverrides, doTest}:
-        let builtRustCrates = builtRustCratesWithFeatures {
-          inherit packageId features crateOverrides buildRustCrateFunc doTest;
-        };
-        in builtRustCrates.${packageId})
+        let
+          builtRustCrates = builtRustCratesWithFeatures {
+            inherit packageId features crateOverrides buildRustCrateFunc;
+            doTest = false;
+          };
+          builtTestRustCrates = builtRustCratesWithFeatures {
+            inherit packageId features crateOverrides buildRustCrateFunc;
+            doTest = true;
+          };
+          drv = builtRustCrates.${packageId};
+          testDrv = builtTestRustCrates.${packageId};
+        in if doTest then crateWithTest drv testDrv else drv)
       { inherit features crateOverrides doTest; };
 
   /* Returns a buildRustCrate derivation for the given packageId and features. */
@@ -207,20 +245,17 @@ rec {
     assert (builtins.isList features);
     assert (builtins.isAttrs target);
 
-    let mergedFeatures = mergePackageFeatures ( args // { inherit target; });
-        mergedTestFeatures = mergePackageFeatures ( args // { target = target // { test = true; }; });
+    let mergedFeatures = mergePackageFeatures ( args // { target = target // { test = doTest; }; });
 
-        buildByPackageId = packageId: buildByPackageIdImpl packageId false;
-        buildTestByPackageId = packageId: buildByPackageIdImpl packageId true;
+        buildByPackageId = packageId: buildByPackageIdImpl packageId;
 
         # Memoize built packages so that reappearing packages are only built once.
         builtByPackageId =
           lib.mapAttrs (packageId: value: buildByPackageId packageId) crateConfigs;
 
-        buildByPackageIdImpl = packageId: test:
+        buildByPackageIdImpl = packageId:
           let
-              features = let f = if !test then mergedFeatures else mergedTestFeatures; in
-                f."${packageId}" or [];
+              features = mergedFeatures."${packageId}" or [];
               crateConfig = lib.filterAttrs (n: v: n != "resolvedDefaultFeatures") crateConfigs."${packageId}";
               dependencies =
                 dependencyDerivations {
